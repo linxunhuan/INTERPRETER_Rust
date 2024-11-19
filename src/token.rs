@@ -1,13 +1,14 @@
 use std::fmt::Display;
 
-#[derive(PartialEq,Debug)]
+#[derive(PartialEq,Debug, Default,Clone)]
 pub struct Token {
     pub kind:TokenKind, // 表示令牌的类型，用 TokenKind 枚举来定义
     pub literal:String, // 令牌的字面值表示，通常是从源代码中提取出来的字符串
 }
 
-#[derive(PartialEq,Debug)]
+#[derive(PartialEq,Debug,Default,Clone)]
 pub enum TokenKind {
+    #[default]
     Illegal,    // 非法的或未识别的字符
     Eof,        // 文件结束符（End of File）
     
