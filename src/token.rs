@@ -6,7 +6,7 @@ pub struct Token {
     pub literal:String, // 令牌的字面值表示，通常是从源代码中提取出来的字符串
 }
 
-#[derive(PartialEq,Debug,Default,Clone)]
+#[derive(PartialEq,Debug,Default,Clone,Hash,Eq)]
 pub enum TokenKind {
     #[default]
     Illegal,    // 非法的或未识别的字符
