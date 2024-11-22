@@ -59,6 +59,9 @@ impl Parser{
         parser.register_prefix(TokenKind::Int, Self::parse_integer_literal);
         parser.register_prefix(TokenKind::Bang, Self::parse_prefix_expression);
         parser.register_prefix(TokenKind::Minus, Self::parse_prefix_expression);
+        parser.register_prefix(TokenKind::True, Self::parse_boolean);
+        parser.register_prefix(TokenKind::False, Self::parse_boolean);
+        parser.register_prefix(TokenKind::Lparen, Self::parse_grouped_expression);
         
         parser.register_infix(TokenKind::Plus, Self::parse_infix_expression);
         parser.register_infix(TokenKind::Minus, Self::parse_infix_expression);
@@ -135,6 +138,24 @@ impl Parser{
             None => return None,
         }
         Some(ExpressionNode::Infix(expression))
+    }
+    
+    fn parse_boolean(&mut self) -> Option<ExpressionNode>{
+        Some(ExpressionNode::BooleanNode(Boolean{
+            token: self.current_token.clone(),
+            value: if self.current_token.literal == "true" {true} else {false},
+        }))
+    }
+    
+    fn parse_grouped_expression(&mut self) -> Option<ExpressionNode>{
+        self.next_token();
+        
+        let exp = self.parse_expression(PrecedenceLevel::Lowest);
+        if !self.expect_peek(TokenKind::Rparen){
+            return None;
+        }
+        
+        exp
     }
 
     fn next_token(&mut self){
@@ -348,6 +369,16 @@ mod tests {
             ("3 != 4", "(3 != 4)"),
             ("3 > 4", "(3 > 4)"),
             ("3 <= 4", "(3 <= 4)"),
+            ("true", "true"),
+            ("false", "false"),
+            ("3 > 5 == false", "((3 > 5) == false)"),
+            ("3 < 5 == true", "((3 < 5) == true)"),
+            ("1 + (2 + 3) + 4", "((1 + (2 + 3)) + 4)"),
+            ("(5 + 5) * 2 * (5 + 5)", "(((5 + 5) * 2) * (5 + 5))"),
+            ("2 * (5 + 5)", "(2 * (5 + 5))"),
+            
+            
+            
         ];
 
         for test in tests {
@@ -560,17 +591,21 @@ mod tests {
 
     #[test]
     fn test_parsing_infix_expression() {
-        let infix_tests:Vec<(&str,i64,&str,i64)> = vec![
-            ("5 + 5;", 5, "+", 5),
-            ("5 - 5;", 5, "-", 5),
-            ("5 * 5;", 5, "*", 5),
-            ("5 / 5;", 5, "/", 5),
-            ("5 > 5;", 5, ">", 5),
-            ("5 < 5;", 5, "<", 5),
-            ("5 == 5;", 5, "==", 5),
-            ("5 != 5;", 5, "!=", 5),
+        let infix_tests:Vec<(&str,Box<dyn any::Any>,&str,Box<dyn any::Any>)> = vec![
+            ("5 + 5;", Box::new(5), "+", Box::new(5)),
+            ("5 - 5;", Box::new(5), "-", Box::new(5)),
+            ("5 * 5;", Box::new(5), "*", Box::new(5)),
+            ("5 / 5;", Box::new(5), "/", Box::new(5)),
+            ("5 > 5;", Box::new(5), ">", Box::new(5)),
+            ("5 < 5;", Box::new(5), "<", Box::new(5)),
+            ("5 == 5;", Box::new(5), "==", Box::new(5)),
+            ("5 != 5;", Box::new(5), "!=", Box::new(5)),
+            ("true == true", Box::new(true),"==", Box::new(true)),
+            ("true != false", Box::new(true),"!=", Box::new(false)),
+            ("false == false", Box::new(false),"==", Box::new(false)),
+            ("false != true", Box::new(false),"!=", Box::new(true)),
         ];
-
+        
         for test in infix_tests {
             let lexer = Lexer::new(test.0);
             let mut parser = Parser::new(lexer);
@@ -602,6 +637,57 @@ mod tests {
                 ),
             }
         }
+    }
+    
+    #[test]
+    fn test_boolean_expression() {
+        let input = r#"
+            true;
+            false;
+        "#;
+        
+        let lexer = Lexer::new(input);
+        let mut parser = Parser::new(lexer);
+        let program = parser.parse_program().unwrap();
+        check_parser_errors(parser);
+        
+        assert_eq!(
+            program.statements.len(), 2,
+            "program.statements does not contain enough statements. got={}",
+            program.statements.len()
+        );
+        
+        let expected_values = vec![(TokenKind::True,"true"),(TokenKind::False,"false")];
+        
+        for(idx,test) in expected_values.into_iter().enumerate(){
+            match &program.statements[idx] {
+                StatementNode::Expression(expr) => {
+                    assert!(expr.expression.is_some());
+                    let exp = expr.expression.as_ref().unwrap();
+                    
+                    match exp {
+                        ExpressionNode::BooleanNode(boolean) => {
+                            assert_eq!(
+                                boolean.token.kind, test.0,
+                                "boolean.value not {}. got={}",
+                                test.0, boolean.token.kind
+                            );
+                            assert_eq!(
+                                boolean.token_literal(), test.1,
+                                "boolean.token_literal() not {}. got={}",
+                                test.1, boolean.token_literal()
+                            );
+                        }
+                        _ => panic!("expression is not Boolean. got={:?}", exp),
+                    }
+                }
+                _ => panic!(
+                    "program.statements[{} is not ExpressionStatement. got={:?}",
+                    idx, program.statements[idx]
+                ),
+            }
+        }
+        
     }
 
     fn check_parser_errors(parser: Parser) {
@@ -658,10 +744,32 @@ mod tests {
             },
             None => match expected.downcast_ref::<i64>() {
                 Some(int_exp) => test_integer_literal(exp, int_exp.to_owned()),
-                None => panic!("type not supported"),
+                None => match expected.downcast_ref::<bool>() {
+                    Some(bool) => test_boolean_literal(exp, bool.to_owned()),
+                    None => panic!("unhandled literal type"),
+                },
             },
         }
     }
+    
+    fn test_boolean_literal(exp: &ExpressionNode, value: bool) {
+        match exp {
+            ExpressionNode::BooleanNode(boolean) => {
+                assert_eq!(
+                    boolean.value, value,
+                    "boolean.value not {}. got={}",
+                    value, boolean.value
+                );
+                assert_eq!(
+                    boolean.token_literal(), format!("{}",value),
+                    "boolean.token_literal() not {}. got={}",
+                    value, boolean.token_literal()
+                );
+            }
+            _ => panic!("exp not Boolean. got={:?}", exp),
+        }
+    }
+    
     
     fn test_infix_expression(
         exp: &ExpressionNode,

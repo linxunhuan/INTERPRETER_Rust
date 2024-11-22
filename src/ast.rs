@@ -9,6 +9,7 @@ pub enum StatementNode {
     Let(LetStatement),
     Return(ReturnStatement),
     Expression(ExpressionStatement),
+    Block(BlockStatement),
 }
 
 impl Node for StatementNode {
@@ -17,6 +18,7 @@ impl Node for StatementNode {
             Self::Let(let_stmt) => let_stmt.token_literal() ,
             Self::Return(return_stmt) => return_stmt.token_literal(),
             Self::Expression(expr_stmt) => expr_stmt.token_literal(),
+            Self::Block(block_stmt) => block_stmt.token_literal(),
         }
     }
     fn print_string(&self) -> String {
@@ -24,6 +26,7 @@ impl Node for StatementNode {
             Self::Let(let_stmt) => let_stmt.print_string(),
             Self::Return(return_stmt) => return_stmt.print_string(),
             Self::Expression(expr_stmt) => expr_stmt.print_string(),
+            Self::Block(block_stmt) => block_stmt.print_string(),
         }
     }
 }
@@ -36,6 +39,8 @@ pub enum ExpressionNode {
     Integer(IntegerLiteral),
     Prefix(PrefixExpression),
     Infix(InfixExpression),
+    BooleanNode(Boolean),
+    IfExpressionNode(IfExpression),
 }
 
 impl Node for ExpressionNode {
@@ -45,6 +50,8 @@ impl Node for ExpressionNode {
             Self::Integer(integer) => integer.token_literal(),
             Self::Prefix(prefix) => prefix.token_literal(),
             Self::Infix(infix) => infix.token_literal(),
+            Self::BooleanNode(boolean) => boolean.token_literal(),
+            Self::IfExpressionNode(if_expr) => if_expr.token_literal(),
             Self::None => String::from(""),
         }
     }
@@ -55,6 +62,8 @@ impl Node for ExpressionNode {
             Self::Integer(integer) => integer.print_string(),
             Self::Prefix(prefix) => prefix.print_string(),
             Self::Infix(infix) => infix.print_string(),
+            Self::BooleanNode(boolean) => boolean.print_string(),
+            Self::IfExpressionNode(if_expr) => if_expr.print_string(),
             Self::None => String::from(""),
         }
     }
@@ -72,6 +81,7 @@ impl Node for Program {
                 StatementNode::Let(let_stmt) => let_stmt.token_literal(),
                 StatementNode::Return(return_stmt) => return_stmt.token_literal(),
                 StatementNode::Expression(expr_stmt) => expr_stmt.token_literal(),
+                StatementNode::Block(block_stmt) => block_stmt.token_literal(),
             }
         }else { 
             String::from("")
@@ -239,6 +249,74 @@ impl Node for InfixExpression {
         out
     }
 }
+
+#[derive(Debug)]
+pub struct Boolean {
+    pub token: Token,
+    pub value: bool,
+}
+
+impl Node for Boolean {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    }
+    
+    fn print_string(&self) -> String {
+        self.token.literal.clone()
+    }
+}
+
+#[derive(Debug,Default)]
+pub struct IfExpression {
+    pub token: Token,
+    pub condition: Box<ExpressionNode>,
+    pub consequence: BlockStatement,
+    pub alternative: Option<BlockStatement>,
+}
+
+impl Node for IfExpression {
+    fn token_literal(&self) -> String {
+        self.token.literal.clone()
+    }
+    
+    fn print_string(&self) -> String {
+        let mut out = String::from("");
+        out.push_str("if");
+        out.push_str(self.condition.print_string().as_str());
+        out.push_str(" ");
+        out.push_str(self.consequence.print_string().as_str());
+        
+        if let Some(alt) = &self.alternative {
+            out.push_str("else ");
+            out.push_str(alt.print_string().as_str());
+        }
+        
+        out
+    }
+}
+
+#[derive(Debug,Default)]
+pub struct BlockStatement {
+    pub token: Token,
+    pub statements: Vec<StatementNode>,
+}
+
+impl Node for BlockStatement {
+    fn token_literal(&self) -> String{
+        self.token.literal.clone()
+    }
+    
+    fn print_string(&self) -> String {
+        let mut out = String::from("");
+        
+        for stmt in self.statements.as_slice(){
+            out.push_str(stmt.print_string().as_str());
+        }
+        out
+    }
+}
+
+
 #[cfg(test)]
 mod tests{
     use crate::token::TokenKind;
